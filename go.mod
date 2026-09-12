@@ -3,6 +3,7 @@ module github.com/domainry/domainry-todo
 go 1.26.0
 
 require (
+	github.com/domainry/domainry-lifecycle-sdk v0.1.8
 	github.com/domainry/domainry-orm v0.1.30
 	github.com/domainry/domainry-tools-sdk v0.1.0
 )
