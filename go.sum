@@ -1,5 +1,7 @@
 github.com/domainry/domainry-foundation v0.1.26 h1:LkGbSj/HIqE7es9LCjE9RhIydg8SFNhdYe/wjCcc3Z0=
 github.com/domainry/domainry-foundation v0.1.26/go.mod h1:pkwel8FFfbVkjAptEDWsA7BxaoPJM8kiQkOwPaIR7eI=
+github.com/domainry/domainry-foundation v0.1.27 h1:73aOhoYjAJVfx2+xLhBFiRDPkttbF11c9x43RROfqqk=
+github.com/domainry/domainry-foundation v0.1.27/go.mod h1:pkwel8FFfbVkjAptEDWsA7BxaoPJM8kiQkOwPaIR7eI=
 github.com/domainry/domainry-lifecycle-sdk v0.1.16 h1:Vjuo3axFvAAFv7NEcm2gs8dVXYKEq00aCBLTlkeMi4Q=
 github.com/domainry/domainry-lifecycle-sdk v0.1.16/go.mod h1:zBx8wUBcC9QpxNS0Z9KcpqfNcsjUjKZbu5kWTysvHzc=
 github.com/domainry/domainry-orm v0.1.30 h1:5QOtG2qRzV1PhiioS2aKfCoEt9ab3OBucwicHAn/5HQ=

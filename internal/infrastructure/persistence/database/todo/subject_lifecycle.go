@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	"github.com/domainry/domainry-orm/query"
@@ -41,17 +42,20 @@ func (s SubjectLifecycle) PreviewSubject(ctx context.Context, workspaceID, subje
 		return nil, err
 	}
 	counts := map[string]int64{}
-	for key, table := range map[string]string{"todos": todoTable, "mutation_receipts": "_agent_todo_mutations"} {
-		statement, args, buildErr := query.NewSelectBuilder(s.store.store.Renderer(), table).Projections(query.Project(query.CountAll())).Where(query.Equal("owner_key", todoOwner(a))).Build()
-		if buildErr != nil {
-			return nil, buildErr
-		}
-		var count int64
-		if err := s.store.store.Database().QueryRowContext(ctx, statement, args...).Scan(&count); err != nil {
-			return nil, err
-		}
-		counts[key] = count
+	statement, args, buildErr := query.NewSelectBuilder(s.store.store.Renderer(), todoTable).Projections(query.Project(query.CountAll())).Where(query.Equal("owner_key", todoOwner(a))).Build()
+	if buildErr != nil {
+		return nil, buildErr
 	}
+	var todoCount int64
+	if err := s.store.store.Database().QueryRowContext(ctx, statement, args...).Scan(&todoCount); err != nil {
+		return nil, err
+	}
+	counts["todos"] = todoCount
+	receipts, err := s.store.operations.SearchRecords(ctx, sharedoperation.RecordFilter{WorkspaceID: a.WorkspaceID, Owner: "todo", Kind: "todo.mutation", RequestedBy: a.UserID, Limit: 1}, true)
+	if err != nil {
+		return nil, err
+	}
+	counts["mutation_receipts"] = int64(receipts.Count)
 	return json.Marshal(counts)
 }
 
@@ -112,16 +116,18 @@ func (s SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, requestID,
 			return scanErr
 		}
 		changed := map[string]int64{}
-		for key, table := range map[string]string{"todos": todoTable, "mutation_receipts": "_agent_todo_mutations"} {
-			statement, deleteArgs, deleteErr := query.NewDeleteBuilder(s.store.store.Renderer(), table).Where(query.Equal("owner_key", todoOwner(a))).Build()
-			if deleteErr != nil {
-				return deleteErr
-			}
-			result, deleteErr := tx.ExecContext(ctx, statement, deleteArgs...)
-			if deleteErr != nil {
-				return deleteErr
-			}
-			changed[key], _ = result.RowsAffected()
+		statement, deleteArgs, deleteErr := query.NewDeleteBuilder(s.store.store.Renderer(), todoTable).Where(query.Equal("owner_key", todoOwner(a))).Build()
+		if deleteErr != nil {
+			return deleteErr
+		}
+		result, deleteErr := tx.ExecContext(ctx, statement, deleteArgs...)
+		if deleteErr != nil {
+			return deleteErr
+		}
+		changed["todos"], _ = result.RowsAffected()
+		changed["mutation_receipts"], deleteErr = s.store.operations.DeleteRecords(sharedoperation.WithExecutor(ctx, tx), sharedoperation.RecordFilter{WorkspaceID: a.WorkspaceID, Owner: "todo", Kind: "todo.mutation", RequestedBy: a.UserID})
+		if deleteErr != nil {
+			return deleteErr
 		}
 		completedAt := time.Now().UTC()
 		receipt, _ = json.Marshal(map[string]any{"request_id": requestID, "changed": changed, "source_references_removed": changed["todos"], "completed_at": completedAt})

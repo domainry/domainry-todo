@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	sharedsubjectlifecycle "github.com/domainry/domainry-foundation/subjectlifecycle"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	ormmigration "github.com/domainry/domainry-orm/migration"
@@ -68,20 +69,28 @@ func TestOpenUsesTodoAndSharedSubjectMigrationsAcrossDeploymentTopologies(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantOwners := sharedsubjectlifecycle.MigrationOwner + "," + MigrationOwner
+	wantOwners := sharedoperation.MigrationOwner + "," + sharedsubjectlifecycle.MigrationOwner + "," + MigrationOwner
 	if strings.Join(firstRegistrar.owners, ",") != wantOwners+","+wantOwners {
 		t.Fatalf("migration owner calls=%v", firstRegistrar.owners)
 	}
-	for _, table := range []string{"_agent_user_todos", "_agent_todo_mutations", sharedsubjectlifecycle.RequestTableName, sharedsubjectlifecycle.StepTableName} {
+	for _, table := range []string{"_agent_user_todos", sharedoperation.TableName, sharedsubjectlifecycle.RequestTableName, sharedsubjectlifecycle.StepTableName} {
 		var count int
 		if err = sharedDB.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("shared table %s count=%d err=%v", table, count, err)
 		}
 	}
+	var retired int
+	if err = sharedDB.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_agent_todo_mutations'`).Scan(&retired); err != nil || retired != 0 {
+		t.Fatalf("retired Todo mutation table count=%d err=%v", retired, err)
+	}
 	authority := toolsdk.Authority{Known: true, RuntimeID: "runtime", WorkspaceID: "workspace", UserID: "alice"}
 	mutation := Mutation{Key: "shared-create", Operation: "todo_create", Data: json.RawMessage(`{"items":[{"title":"shared","timezone":"UTC"}]}`)}
 	if _, err = first.ApplyMutation(t.Context(), mutation, authority); err != nil {
 		t.Fatal(err)
+	}
+	var receipts int
+	if err = sharedDB.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE workspace_id=? AND owner='todo' AND kind='todo.mutation' AND status='succeeded'`, authority.WorkspaceID).Scan(&receipts); err != nil || receipts != 1 {
+		t.Fatalf("shared Todo operation receipts=%d err=%v", receipts, err)
 	}
 	if page, readErr := second.Todos(t.Context(), contract.TodoQuery{}, authority); readErr != nil || len(page.Items) != 1 {
 		t.Fatalf("shared module rows=%+v err=%v", page, readErr)
@@ -95,5 +104,8 @@ func TestOpenUsesTodoAndSharedSubjectMigrationsAcrossDeploymentTopologies(t *tes
 	}
 	if page, readErr := standalone.Todos(t.Context(), contract.TodoQuery{}, authority); readErr != nil || len(page.Items) != 0 {
 		t.Fatalf("standalone database leaked shared rows=%+v err=%v", page, readErr)
+	}
+	if err = standaloneDB.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE owner='todo'`).Scan(&receipts); err != nil || receipts != 0 {
+		t.Fatalf("standalone database leaked shared operation receipts=%d err=%v", receipts, err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	sharedsubjectlifecycle "github.com/domainry/domainry-foundation/subjectlifecycle"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	"github.com/domainry/domainry-orm/dialect"
@@ -23,6 +24,10 @@ func openLifecycleTodoStore(t *testing.T) (*Store, *sql.DB) {
 	t.Cleanup(func() { _ = db.Close() })
 	db.SetMaxOpenConns(1)
 	d, _ := dialect.New(dialect.SQLite)
+	operations, err := sharedoperation.SchemaMigrationsForDialect(sharedoperation.AdaptDialect(d.WithSchema("")))
+	if err != nil {
+		t.Fatal(err)
+	}
 	shared, err := sharedsubjectlifecycle.SchemaMigrationsForDialect(d.WithSchema(""))
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +36,7 @@ func openLifecycleTodoStore(t *testing.T) (*Store, *sql.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, m := range append(shared, owned...) {
+	for _, m := range append(append(operations, shared...), owned...) {
 		for _, statement := range m.Statements {
 			if _, err = db.ExecContext(t.Context(), statement); err != nil {
 				t.Fatal(err)
@@ -102,11 +107,15 @@ func TestStandaloneTodoReceiptAndScope(t *testing.T) {
 	defer db.Close()
 	db.SetMaxOpenConns(1)
 	d, _ := dialect.New(dialect.SQLite)
+	operations, e := sharedoperation.SchemaMigrationsForDialect(sharedoperation.AdaptDialect(d.WithSchema("")))
+	if e != nil {
+		t.Fatal(e)
+	}
 	migrations, e := SchemaMigrations(d.WithSchema(""))
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, migration := range migrations {
+	for _, migration := range append(operations, migrations...) {
 		for _, q := range migration.Statements {
 			if _, e = db.Exec(q); e != nil {
 				t.Fatal(e)

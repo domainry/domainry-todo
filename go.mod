@@ -9,7 +9,7 @@ require (
 )
 
 require (
-	github.com/domainry/domainry-foundation v0.1.26
+	github.com/domainry/domainry-foundation v0.1.27
 	modernc.org/sqlite v1.57.0
 )
 

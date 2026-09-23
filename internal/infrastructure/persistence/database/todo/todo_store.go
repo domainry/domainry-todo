@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/domainry/domainry-todo/internal/domain/todo/service"
+	"errors"
 	"strings"
 	"time"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	contract "github.com/domainry/domainry-todo/contract"
+	"github.com/domainry/domainry-todo/internal/domain/todo/service"
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
@@ -233,18 +235,17 @@ func (s *Store) todoMutation(ctx context.Context, clientID, operation string, in
 		return todoError("bad_request", "todo_client_id_required")
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		var receipt struct {
-			Hash   string
-			Result json.RawMessage
+		command := todoOperationCommand(clientID, operation, input, a)
+		receipt, claimed, err := s.operations.Claim(sharedoperation.WithExecutor(ctx, tx), command)
+		if errors.Is(err, sharedoperation.ErrIdempotencyConflict) {
+			return todoError("conflict", "idempotency_conflict")
 		}
-		hash := todoHash([]any{operation, input})
-		found, err := s.readPayload(ctx, tx, "_agent_todo_mutations", query.And(query.Equal("owner_key", todoOwner(a)), query.Equal("client_key", todoHash(clientID))), &receipt)
 		if err != nil {
 			return err
 		}
-		if found {
-			if receipt.Hash != hash {
-				return todoError("conflict", "idempotency_conflict")
+		if !claimed {
+			if receipt.Status != sharedoperation.StatusSucceeded {
+				return todoError("conflict", "mutation_in_progress")
 			}
 			return json.Unmarshal(receipt.Result, out)
 		}
@@ -252,14 +253,22 @@ func (s *Store) todoMutation(ctx context.Context, clientID, operation string, in
 		if err != nil {
 			return err
 		}
-		receipt.Hash = hash
-		receipt.Result = todoJSON(value)
-		statement, args, err := query.NewInsertBuilder(s.store.Renderer(), "_agent_todo_mutations").Columns("owner_key", "client_key", "created_at", "payload_json").Values(todoOwner(a), todoHash(clientID), time.Now().UnixMilli(), todoJSON(receipt)).Build()
-		if err = todoExec(ctx, tx, statement, args, err); err != nil {
+		result := json.RawMessage(todoJSON(value))
+		if err = s.operations.Complete(sharedoperation.WithExecutor(ctx, tx), sharedoperation.Completion{ID: command.ID, Scope: command.Scope, Owner: command.Owner, Kind: command.Kind, IdempotencyKey: command.IdempotencyKey, RequestFingerprint: command.RequestFingerprint, Result: result, CompletedAt: time.Now().UTC()}); err != nil {
 			return err
 		}
-		return json.Unmarshal(receipt.Result, out)
+		return json.Unmarshal(result, out)
 	})
+}
+
+func todoOperationCommand(clientID, action string, input any, a toolsdk.Authority) sharedoperation.Command {
+	key := todoOwner(a) + ":" + todoHash(clientID)
+	id := "todo-operation:" + todoHash([]string{a.WorkspaceID, key})
+	return sharedoperation.Command{
+		ID: id, Scope: sharedoperation.Scope{WorkspaceID: a.WorkspaceID, ResourceType: "todo_owner", ResourceID: todoOwner(a)},
+		Owner: "todo", Kind: "todo.mutation", ActionKey: action, IdempotencyKey: key, RequestFingerprint: todoHash([]any{action, input}),
+		RequestedBy: a.UserID, Reason: "Todo mutation", Reference: clientID, StatusURL: "todo://operations/" + id, CreatedAt: time.Now().UTC(),
+	}
 }
 func (s *Store) CreateTodos(ctx context.Context, in contract.TodoCreate, a toolsdk.Authority) (contract.TodoBatch, error) {
 	var out contract.TodoBatch

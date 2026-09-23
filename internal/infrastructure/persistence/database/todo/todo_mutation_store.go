@@ -5,9 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/domainry/domainry-orm/query"
 	"io"
 
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-todo/contract"
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
@@ -90,18 +90,18 @@ func (s *Store) MutationReceipt(ctx context.Context, in Mutation, a toolsdk.Auth
 	if err := todoAuthority(a); err != nil {
 		return MutationResult{}, false, err
 	}
-	var receipt struct {
-		Hash   string
-		Result json.RawMessage
-	}
-	found, err := s.readPayload(ctx, s.store.Database(), "_agent_todo_mutations", query.And(query.Equal("owner_key", todoOwner(a)), query.Equal("client_key", todoHash("tool-"+todoHash(in.Key)))), &receipt)
+	command := todoOperationCommand("tool-"+todoHash(in.Key), in.Operation, in, a)
+	receipt, found, err := s.operations.GetRecord(ctx, sharedoperation.RecordFilter{WorkspaceID: a.WorkspaceID, Owner: command.Owner, Kind: command.Kind, IdempotencyKey: command.IdempotencyKey})
 	if err != nil || !found {
 		return MutationResult{}, found, err
 	}
-	if receipt.Hash != todoHash([]any{in.Operation, in}) {
+	if receipt.RequestFingerprint != command.RequestFingerprint {
 		return MutationResult{}, false, todoError("conflict", "idempotency_conflict")
 	}
+	if receipt.Status != sharedoperation.StatusSucceeded {
+		return MutationResult{}, false, nil
+	}
 	var out MutationResult
-	err = json.Unmarshal(receipt.Result, &out)
+	err = json.Unmarshal(receipt.ResultJSON, &out)
 	return out, true, err
 }

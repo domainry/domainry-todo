@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-orm/sqlhost"
@@ -51,15 +52,16 @@ type DB interface {
 // Todo never reads a conversation table or depends on Agent execution state.
 type SourceAuthorizer func(context.Context, DB, string, toolsdk.Authority) error
 type Store struct {
-	store  *database
-	source SourceAuthorizer
+	store      *database
+	source     SourceAuthorizer
+	operations *sharedoperation.SQLStore
 }
 
 func NewStore(db sqlhost.Database, dialect Dialect, profile ormdriver.Profile, source SourceAuthorizer) (*Store, error) {
 	if db == nil || dialect == nil {
 		return nil, fmt.Errorf("todo database and dialect are required")
 	}
-	return &Store{store: &database{db: db, dialect: dialect, profile: profile}, source: source}, nil
+	return &Store{store: &database{db: db, dialect: dialect, profile: profile}, source: source, operations: sharedoperation.NewSQLStore(db, sharedoperation.AdaptDialect(dialect))}, nil
 }
 func (s *Store) authorizeSource(ctx context.Context, db DB, ref string, a toolsdk.Authority) error {
 	if s.source != nil {
