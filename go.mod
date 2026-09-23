@@ -4,12 +4,12 @@ go 1.26.0
 
 require (
 	github.com/domainry/domainry-lifecycle-sdk v0.1.16
-	github.com/domainry/domainry-orm v0.1.30
+	github.com/domainry/domainry-orm v0.1.31
 	github.com/domainry/domainry-tools-sdk v0.1.0
 )
 
 require (
-	github.com/domainry/domainry-foundation v0.1.27
+	github.com/domainry/domainry-foundation v0.1.36
 	modernc.org/sqlite v1.57.0
 )
 

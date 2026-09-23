@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	"github.com/domainry/domainry-foundation/schemaownership"
 	sharedsubjectlifecycle "github.com/domainry/domainry-foundation/subjectlifecycle"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	ormmigration "github.com/domainry/domainry-orm/migration"
@@ -107,5 +108,36 @@ func TestOpenUsesTodoAndSharedSubjectMigrationsAcrossDeploymentTopologies(t *tes
 	}
 	if err = standaloneDB.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE owner='todo'`).Scan(&receipts); err != nil || receipts != 0 {
 		t.Fatalf("standalone database leaked shared operation receipts=%d err=%v", receipts, err)
+	}
+}
+
+func TestTodoSchemaOwnershipMatchesFreshPhysicalPrimaryKey(t *testing.T) {
+	tables := SchemaOwnership()
+	if err := schemaownership.ValidateAll(tables); err != nil {
+		t.Fatal(err)
+	}
+	if len(tables) != 1 || len(OwnedTables()) != 1 || OwnedTables()[0] != tables[0].Name {
+		t.Fatalf("Todo ownership=%+v names=%v", tables, OwnedTables())
+	}
+	database, dialect := openDatabase(t, "todo-ownership")
+	registrar := &registrar{database: database}
+	if _, err := Open(t.Context(), database, dialect, nil, registrar, nil); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := database.QueryContext(t.Context(), `SELECT name FROM pragma_table_info(?) WHERE pk > 0 ORDER BY pk`, tables[0].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	primaryKey := []string{}
+	for rows.Next() {
+		var column string
+		if err := rows.Scan(&column); err != nil {
+			t.Fatal(err)
+		}
+		primaryKey = append(primaryKey, column)
+	}
+	if strings.Join(primaryKey, ",") != strings.Join(tables[0].PrimaryKey, ",") {
+		t.Fatalf("Todo physical primary key=%v ownership=%v", primaryKey, tables[0].PrimaryKey)
 	}
 }

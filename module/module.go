@@ -5,6 +5,7 @@ package module
 import (
 	"context"
 
+	"github.com/domainry/domainry-foundation/schemaownership"
 	driver "github.com/domainry/domainry-orm/driver"
 	migration "github.com/domainry/domainry-orm/migration"
 	sqlhost "github.com/domainry/domainry-orm/sqlhost"
@@ -40,6 +41,8 @@ type MutationResult = store.MutationResult
 func SchemaMigrations(d Dialect) ([]migration.Migration, error) {
 	return store.SchemaMigrations(d)
 }
+func SchemaOwnership() []schemaownership.Table { return store.SchemaOwnership() }
+func OwnedTables() []string                    { return schemaownership.Names(SchemaOwnership()) }
 
 type SubjectLifecycle = store.SubjectLifecycle
 
