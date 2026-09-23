@@ -15,13 +15,13 @@ import (
 
 func TestLayeredLayoutAndPrivateImplementations(t *testing.T) {
 	root := filepath.Join("..", "..")
-	for _, rel := range []string{"internal/domain/todo/service", "internal/infrastructure/persistence/database/todo", "module"} {
+	for _, rel := range []string{"internal/domain/todo/service", "internal/assembly/module", "internal/infrastructure/persistence/database/todo", "module", "modulehost"} {
 		if info, err := os.Stat(filepath.Join(root, rel)); err != nil || !info.IsDir() {
 			t.Errorf("missing boundary %s: %v", rel, err)
 		}
 	}
 	public := map[string]bool{}
-	for _, p := range []string{"module", "contract"} {
+	for _, p := range []string{"module", "modulehost", "contract"} {
 		public[p] = true
 	}
 	filename := regexp.MustCompile(`^[a-z][a-z0-9_]*\.go$`)

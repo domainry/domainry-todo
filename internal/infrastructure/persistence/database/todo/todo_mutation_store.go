@@ -12,19 +12,8 @@ import (
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
-// Mutation carries business input and optional source references. It contains
-// no Agent lease, execution step, confirmation or run-state dependency.
-type Mutation struct {
-	Key                  string
-	Operation            string
-	Data                 json.RawMessage
-	SourceConversationID string
-	SourceRunID          string
-}
-type MutationResult struct {
-	ResourceID string
-	Content    json.RawMessage
-}
+type Mutation = contract.Mutation
+type MutationResult = contract.MutationResult
 
 func (s *Store) ApplyMutation(ctx context.Context, in Mutation, a toolsdk.Authority) (MutationResult, error) {
 	var out MutationResult
