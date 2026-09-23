@@ -21,7 +21,11 @@ func Open(ctx context.Context, db sqlhost.Database, dialect Dialect, profile orm
 	if migrations == nil {
 		return nil, fmt.Errorf("Todo migration registrar is required")
 	}
-	if err := sharedsubjectlifecycle.EnsureSchema(ctx, dialect, migrations); err != nil {
+	sharedDialect, ok := dialect.(sharedsubjectlifecycle.Dialect)
+	if !ok {
+		return nil, fmt.Errorf("Todo dialect does not support shared Subject Lifecycle persistence")
+	}
+	if err := sharedsubjectlifecycle.EnsureSchema(ctx, sharedDialect, migrations); err != nil {
 		return nil, err
 	}
 	values, err := SchemaMigrations(dialect)

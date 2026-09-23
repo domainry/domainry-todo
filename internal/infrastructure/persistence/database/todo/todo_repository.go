@@ -21,7 +21,6 @@ type Dialect interface {
 	Identifier(string) string
 	Table(string) string
 	Placeholder(int) string
-	Insert(string, []string) string
 }
 type database struct {
 	db      sqlhost.Database
