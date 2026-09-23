@@ -23,7 +23,7 @@ func openLifecycleTodoStore(t *testing.T) (*Store, *sql.DB) {
 	t.Cleanup(func() { _ = db.Close() })
 	db.SetMaxOpenConns(1)
 	d, _ := dialect.New(dialect.SQLite)
-	for _, build := range []func(Dialect) (migration.Migration, error){LegacyMigration, SubjectLifecycleMigration} {
+	for _, build := range []func(Dialect) (migration.Migration, error){LegacyMigration} {
 		m, buildErr := build(d.WithSchema(""))
 		if buildErr != nil {
 			t.Fatal(buildErr)
@@ -34,6 +34,9 @@ func openLifecycleTodoStore(t *testing.T) (*Store, *sql.DB) {
 			}
 		}
 	}
+	if _, err = db.ExecContext(t.Context(), `CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`); err != nil {
+		t.Fatal(err)
+	}
 	store, err := NewStore(db, d.WithSchema(""), nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +45,7 @@ func openLifecycleTodoStore(t *testing.T) (*Store, *sql.DB) {
 }
 
 func TestSubjectLifecycleErasesOneOwnerAndReplaysReceipt(t *testing.T) {
-	store, _ := openLifecycleTodoStore(t)
+	store, db := openLifecycleTodoStore(t)
 	a := sdk.Authority{Known: true, RuntimeID: "office", WorkspaceID: "workspace", UserID: "alice"}
 	b := a
 	b.UserID = "bob"
@@ -74,6 +77,10 @@ func TestSubjectLifecycleErasesOneOwnerAndReplaysReceipt(t *testing.T) {
 	replayed, err := lifecycle.EraseSubjectForRequest(t.Context(), "erase-alice", a.WorkspaceID, a.UserID, nil)
 	if err != nil || !bytes.Equal(receipt, replayed) {
 		t.Fatalf("receipt replay=%s err=%v", replayed, err)
+	}
+	var steps int
+	if err = db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _subject_steps WHERE workspace_id=? AND request_id=? AND owner='todo' AND operation='erase'`, a.WorkspaceID, "erase-alice").Scan(&steps); err != nil || steps != 1 {
+		t.Fatalf("shared Todo subject steps=%d err=%v", steps, err)
 	}
 	if page, err := store.Todos(t.Context(), contract.TodoQuery{}, a); err != nil || len(page.Items) != 0 {
 		t.Fatalf("Alice todos=%+v err=%v", page, err)

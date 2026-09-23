@@ -26,9 +26,6 @@ type MutationResult = store.MutationResult
 func LegacyMigration(d Dialect) (migration.Migration, error) {
 	return store.LegacyMigration(d)
 }
-func SubjectLifecycleMigration(d Dialect) (migration.Migration, error) {
-	return store.SubjectLifecycleMigration(d)
-}
 
 type SubjectLifecycle = store.SubjectLifecycle
 

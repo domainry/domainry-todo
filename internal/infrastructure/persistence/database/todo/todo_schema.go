@@ -27,14 +27,6 @@ func LegacyMigration(d Dialect) (migration.Migration, error) {
 	return m, nil
 }
 
-func SubjectLifecycleMigration(d Dialect) (migration.Migration, error) {
-	statement, _, err := ormschema.NewTable(d, subjectReceiptTable).IfNotExists().Columns(
-		required("owner_key", ormschema.TextKey(64)), required("request_id", ormschema.TextKey(96)),
-		required("payload_json", ormschema.LongText()),
-	).PrimaryKey("owner_key", "request_id").Build()
-	return migration.Migration{Version: 2, Name: "todo_subject_erasure_receipts", Statements: []string{statement}}, err
-}
-
 func required(name string, kind ormschema.ColumnType) ormschema.ColumnDefinition {
 	return ormschema.Column(name, kind).NotNull()
 }

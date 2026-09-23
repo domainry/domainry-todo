@@ -14,7 +14,7 @@ import (
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 
-const subjectReceiptTable = "_todo_subject_erasure_receipts"
+const sharedSubjectStepsTable = "_subject_steps"
 
 type SubjectLifecycle struct {
 	store     *Store
@@ -94,11 +94,19 @@ func (s SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, requestID,
 	}
 	var receipt json.RawMessage
 	err = s.store.transaction(ctx, func(tx *sql.Tx) error {
-		lookup, args, buildErr := query.NewSelectBuilder(s.store.store.Renderer(), subjectReceiptTable).Columns("payload_json").Where(query.And(query.Equal("owner_key", todoOwner(a)), query.Equal("request_id", requestID))).Build()
+		lookup, args, buildErr := query.NewWorkspaceSelectBuilder(s.store.store.Renderer(), sharedSubjectStepsTable, a.WorkspaceID).
+			Columns("payload_json").
+			Where(query.And(query.Equal("request_id", requestID), query.Equal("owner", "todo"), query.Equal("operation", "erase"))).Build()
 		if buildErr != nil {
 			return buildErr
 		}
-		if scanErr := tx.QueryRowContext(ctx, lookup, args...).Scan(&receipt); scanErr == nil {
+		var stored string
+		if scanErr := tx.QueryRowContext(ctx, lookup, args...).Scan(&stored); scanErr == nil {
+			var step lifecyclemodel.SubjectExecutionStep
+			if json.Unmarshal([]byte(stored), &step) != nil || step.WorkspaceID != a.WorkspaceID || step.RequestID != requestID || step.Owner != "todo" || step.Operation != "erase" || !json.Valid(step.Payload) {
+				return fmt.Errorf("todo shared subject execution step is invalid")
+			}
+			receipt = append(json.RawMessage(nil), step.Payload...)
 			return nil
 		} else if !errorsIsNoRows(scanErr) {
 			return scanErr
@@ -115,8 +123,15 @@ func (s SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, requestID,
 			}
 			changed[key], _ = result.RowsAffected()
 		}
-		receipt, _ = json.Marshal(map[string]any{"request_id": requestID, "changed": changed, "source_references_removed": changed["todos"], "completed_at": time.Now().UTC()})
-		statement, insertArgs, buildErr := query.NewInsertBuilder(s.store.store.Renderer(), subjectReceiptTable).Columns("owner_key", "request_id", "payload_json").Values(todoOwner(a), requestID, receipt).Build()
+		completedAt := time.Now().UTC()
+		receipt, _ = json.Marshal(map[string]any{"request_id": requestID, "changed": changed, "source_references_removed": changed["todos"], "completed_at": completedAt})
+		step, marshalErr := json.Marshal(lifecyclemodel.SubjectExecutionStep{WorkspaceID: a.WorkspaceID, RequestID: requestID, Owner: "todo", Operation: "erase", Payload: append(json.RawMessage(nil), receipt...), CompletedAt: completedAt})
+		if marshalErr != nil {
+			return marshalErr
+		}
+		statement, insertArgs, buildErr := query.NewWorkspaceInsertBuilder(s.store.store.Renderer(), sharedSubjectStepsTable, a.WorkspaceID).
+			Columns("request_id", "owner", "operation", "payload_json", "completed_at").
+			Values(requestID, "todo", "erase", string(step), completedAt.Format(time.RFC3339Nano)).Build()
 		if buildErr != nil {
 			return buildErr
 		}
