@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	sharedsubjectlifecycle "github.com/domainry/domainry-foundation/subjectlifecycle"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	"github.com/domainry/domainry-orm/dialect"
-	"github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-todo/contract"
 	sdk "github.com/domainry/domainry-tools-sdk"
 	_ "modernc.org/sqlite"
@@ -23,19 +23,20 @@ func openLifecycleTodoStore(t *testing.T) (*Store, *sql.DB) {
 	t.Cleanup(func() { _ = db.Close() })
 	db.SetMaxOpenConns(1)
 	d, _ := dialect.New(dialect.SQLite)
-	for _, build := range []func(Dialect) (migration.Migration, error){LegacyMigration} {
-		m, buildErr := build(d.WithSchema(""))
-		if buildErr != nil {
-			t.Fatal(buildErr)
-		}
+	shared, err := sharedsubjectlifecycle.SchemaMigrationsForDialect(d.WithSchema(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned, err := SchemaMigrations(d.WithSchema(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range append(shared, owned...) {
 		for _, statement := range m.Statements {
 			if _, err = db.ExecContext(t.Context(), statement); err != nil {
 				t.Fatal(err)
 			}
 		}
-	}
-	if _, err = db.ExecContext(t.Context(), `CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`); err != nil {
-		t.Fatal(err)
 	}
 	store, err := NewStore(db, d.WithSchema(""), nil, nil)
 	if err != nil {
@@ -101,13 +102,15 @@ func TestStandaloneTodoReceiptAndScope(t *testing.T) {
 	defer db.Close()
 	db.SetMaxOpenConns(1)
 	d, _ := dialect.New(dialect.SQLite)
-	migration, e := LegacyMigration(d.WithSchema(""))
+	migrations, e := SchemaMigrations(d.WithSchema(""))
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, q := range migration.Statements {
-		if _, e = db.Exec(q); e != nil {
-			t.Fatal(e)
+	for _, migration := range migrations {
+		for _, q := range migration.Statements {
+			if _, e = db.Exec(q); e != nil {
+				t.Fatal(e)
+			}
 		}
 	}
 	s, e := NewStore(db, d.WithSchema(""), nil, nil)
