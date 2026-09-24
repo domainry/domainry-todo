@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
-	todocontract "github.com/domainry/domainry-todo/contract"
+	todocontract "github.com/domainry/domainry-todo-sdk/contract"
+	todomodulehost "github.com/domainry/domainry-todo-sdk/modulehost"
 	"github.com/domainry/domainry-todo/internal/domain/todo/service"
 	store "github.com/domainry/domainry-todo/internal/infrastructure/persistence/database/todo"
-	todomodulehost "github.com/domainry/domainry-todo/modulehost"
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 

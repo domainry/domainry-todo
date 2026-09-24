@@ -8,7 +8,7 @@ import (
 	"io"
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
-	"github.com/domainry/domainry-todo/contract"
+	"github.com/domainry/domainry-todo-sdk/contract"
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 )
 

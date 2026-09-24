@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/domainry/domainry-todo/contract"
+	"github.com/domainry/domainry-todo-sdk/contract"
 	sdk "github.com/domainry/domainry-tools-sdk"
 	"strings"
 	"time"

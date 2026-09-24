@@ -8,7 +8,7 @@ import (
 	sharedsubjectlifecycle "github.com/domainry/domainry-foundation/subjectlifecycle"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	"github.com/domainry/domainry-orm/dialect"
-	"github.com/domainry/domainry-todo/contract"
+	"github.com/domainry/domainry-todo-sdk/contract"
 	sdk "github.com/domainry/domainry-tools-sdk"
 	_ "modernc.org/sqlite"
 	"path/filepath"

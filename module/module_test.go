@@ -15,8 +15,8 @@ import (
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	ormmigration "github.com/domainry/domainry-orm/migration"
 	"github.com/domainry/domainry-orm/sqlhost"
-	"github.com/domainry/domainry-todo/contract"
-	todomodulehost "github.com/domainry/domainry-todo/modulehost"
+	"github.com/domainry/domainry-todo-sdk/contract"
+	todomodulehost "github.com/domainry/domainry-todo-sdk/modulehost"
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 	_ "modernc.org/sqlite"
 )

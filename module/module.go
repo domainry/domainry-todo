@@ -5,9 +5,9 @@ package module
 import (
 	"github.com/domainry/domainry-foundation/schemaownership"
 	migration "github.com/domainry/domainry-orm/migration"
+	modulehost "github.com/domainry/domainry-todo-sdk/modulehost"
 	assembly "github.com/domainry/domainry-todo/internal/assembly/module"
 	store "github.com/domainry/domainry-todo/internal/infrastructure/persistence/database/todo"
-	modulehost "github.com/domainry/domainry-todo/modulehost"
 )
 
 type Dialect = store.Dialect

@@ -11,7 +11,7 @@ import (
 
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
-	contract "github.com/domainry/domainry-todo/contract"
+	contract "github.com/domainry/domainry-todo-sdk/contract"
 	"github.com/domainry/domainry-todo/internal/domain/todo/service"
 	toolsdk "github.com/domainry/domainry-tools-sdk"
 )

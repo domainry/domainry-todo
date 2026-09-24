@@ -4,8 +4,10 @@ github.com/domainry/domainry-lifecycle-sdk v0.1.16 h1:Vjuo3axFvAAFv7NEcm2gs8dVXY
 github.com/domainry/domainry-lifecycle-sdk v0.1.16/go.mod h1:zBx8wUBcC9QpxNS0Z9KcpqfNcsjUjKZbu5kWTysvHzc=
 github.com/domainry/domainry-orm v0.1.31 h1:fovrAVD9kj4nPUgXt0ReDe7oKd3cnM03mhh+Q51SkLI=
 github.com/domainry/domainry-orm v0.1.31/go.mod h1:gB/ooN737tsBYHbeHqCpngEprvdvZKp0Zygtzv+IPJY=
-github.com/domainry/domainry-tools-sdk v0.1.0 h1:4BCL2H0VzDUEpBtVqHiswJCkdiBFMTR/go+jLmEdw50=
-github.com/domainry/domainry-tools-sdk v0.1.0/go.mod h1:41IRoC2xhp8FiOsHb94+Pk+UWA+WxrGOCcTvNIILy+g=
+github.com/domainry/domainry-todo-sdk v0.1.0 h1:Kg7juJFXzIxZ9Vx97IWkFSmCzWbcZG8zhRQQRL5DDaQ=
+github.com/domainry/domainry-todo-sdk v0.1.0/go.mod h1:UTFhvMMC2vBYX7P+ArDWYQVPowLvOUxNt/GHEKtQ1aY=
+github.com/domainry/domainry-tools-sdk v0.1.5 h1:+WzsaHZklaLYnH2ygQaWgk4P/jsmKLyookAIC73tbiA=
+github.com/domainry/domainry-tools-sdk v0.1.5/go.mod h1:41IRoC2xhp8FiOsHb94+Pk+UWA+WxrGOCcTvNIILy+g=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 h1:LMLX+LgTNWpfvCBdFebv6EsYotImrt/Ppc5cXIriCSo=
@@ -26,6 +28,8 @@ github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOF
 github.com/ncruces/go-strftime v1.0.0/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
+github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 h1:1EYB5IzjZawrrnELUi78f9fPu57HuXjmddZPjrls/28=
+github.com/santhosh-tekuri/jsonschema/v6 v6.0.3/go.mod h1:JXeL+ps8p7/KNMjDQk3TCwPpBy0wYklyWTfbkIzdIFU=
 golang.org/x/mod v0.37.0 h1:vF1DjpVEshcIqoEaauuHebaLk1O1forxjxBaVn884JQ=
 golang.org/x/mod v0.37.0/go.mod h1:m8S8VeM9r4dzDwjrKO0a1sZP3YjeMamRRlD+fmR2Q/0=
 golang.org/x/sync v0.21.0 h1:HLII4xRRTtCRkxYp4HNFF0Js/Og6q2i++KXbg0gHCwM=
