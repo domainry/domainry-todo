@@ -22,6 +22,15 @@ type SubjectLifecycle struct {
 	runtimeID string
 }
 
+type persistedSubjectStep struct {
+	WorkspaceID string          `json:"workspace_id"`
+	RequestID   string          `json:"request_id"`
+	Owner       string          `json:"owner"`
+	Operation   string          `json:"operation"`
+	Payload     json.RawMessage `json:"payload"`
+	CompletedAt int64           `json:"completed_at"`
+}
+
 func NewSubjectLifecycle(store *Store, runtimeID string) SubjectLifecycle {
 	return SubjectLifecycle{store: store, runtimeID: strings.TrimSpace(runtimeID)}
 }
@@ -106,7 +115,7 @@ func (s SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, requestID,
 		}
 		var stored string
 		if scanErr := tx.QueryRowContext(ctx, lookup, args...).Scan(&stored); scanErr == nil {
-			var step lifecyclemodel.SubjectExecutionStep
+			var step persistedSubjectStep
 			if json.Unmarshal([]byte(stored), &step) != nil || step.WorkspaceID != a.WorkspaceID || step.RequestID != requestID || step.Owner != "todo" || step.Operation != "erase" || !json.Valid(step.Payload) {
 				return fmt.Errorf("todo shared subject execution step is invalid")
 			}
@@ -130,14 +139,14 @@ func (s SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, requestID,
 			return deleteErr
 		}
 		completedAt := time.Now().UTC()
-		receipt, _ = json.Marshal(map[string]any{"request_id": requestID, "changed": changed, "source_references_removed": changed["todos"], "completed_at": completedAt})
-		step, marshalErr := json.Marshal(lifecyclemodel.SubjectExecutionStep{WorkspaceID: a.WorkspaceID, RequestID: requestID, Owner: "todo", Operation: "erase", Payload: append(json.RawMessage(nil), receipt...), CompletedAt: completedAt})
+		receipt, _ = json.Marshal(map[string]any{"request_id": requestID, "changed": changed, "source_references_removed": changed["todos"], "completed_at": completedAt.UnixMilli()})
+		step, marshalErr := json.Marshal(persistedSubjectStep{WorkspaceID: a.WorkspaceID, RequestID: requestID, Owner: "todo", Operation: "erase", Payload: append(json.RawMessage(nil), receipt...), CompletedAt: completedAt.UnixMilli()})
 		if marshalErr != nil {
 			return marshalErr
 		}
 		statement, insertArgs, buildErr := query.NewWorkspaceInsertBuilder(s.store.store.Renderer(), sharedSubjectStepsTable, a.WorkspaceID).
 			Columns("request_id", "owner", "operation", "payload_json", "completed_at").
-			Values(requestID, "todo", "erase", string(step), completedAt.Format(time.RFC3339Nano)).Build()
+			Values(requestID, "todo", "erase", string(step), completedAt.UnixMilli()).Build()
 		if buildErr != nil {
 			return buildErr
 		}

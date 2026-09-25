@@ -22,7 +22,7 @@ type Registrar struct {
 func (*Registrar) Driver() string { return "sqlite" }
 func (*Registrar) Schema() string { return "" }
 func (r *Registrar) Prepare(ctx context.Context) error {
-	statement, args, err := schema.NewTable(r.Renderer, "_schema_migrations").IfNotExists().Columns(schema.Column("owner", schema.TextKey(191)).NotNull(), schema.Column("version", schema.BigInt()).NotNull(), schema.Column("name", schema.TextKey(191)).NotNull(), schema.Column("checksum", schema.TextKey(64)).NotNull(), schema.Column("dirty", schema.Boolean()).NotNull(), schema.Column("applied_at", schema.TextKey(40)).NotNull()).PrimaryKey("owner", "version").Build()
+	statement, args, err := schema.NewTable(r.Renderer, "_schema_migrations").IfNotExists().Columns(schema.Column("owner", schema.TextKey(191)).NotNull(), schema.Column("version", schema.BigInt()).NotNull(), schema.Column("name", schema.TextKey(191)).NotNull(), schema.Column("checksum", schema.TextKey(64)).NotNull(), schema.Column("dirty", schema.Boolean()).NotNull(), schema.Column("applied_at", schema.BigInt()).NotNull()).PrimaryKey("owner", "version").Build()
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (r *Registrar) apply(ctx context.Context, owner string, value ormmigration.
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	insert, insertArgs, err := query.NewInsertBuilder(r.Renderer, "_schema_migrations").Columns("owner", "version", "name", "checksum", "dirty", "applied_at").Values(owner, value.Version, value.Name, checksum, true, "").Build()
+	insert, insertArgs, err := query.NewInsertBuilder(r.Renderer, "_schema_migrations").Columns("owner", "version", "name", "checksum", "dirty", "applied_at").Values(owner, value.Version, value.Name, checksum, true, int64(0)).Build()
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (r *Registrar) apply(ctx context.Context, owner string, value ormmigration.
 			return fmt.Errorf("apply %s/%d: %w", owner, value.Version, err)
 		}
 	}
-	complete, completeArgs, err := query.NewUpdateBuilder(r.Renderer, "_schema_migrations").Set("dirty", false).Set("applied_at", time.Now().UTC().Format(time.RFC3339Nano)).Where(predicate).Build()
+	complete, completeArgs, err := query.NewUpdateBuilder(r.Renderer, "_schema_migrations").Set("dirty", false).Set("applied_at", time.Now().UTC().UnixMilli()).Where(predicate).Build()
 	if err != nil {
 		return err
 	}
