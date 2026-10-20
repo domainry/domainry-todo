@@ -9,8 +9,8 @@ require (
 )
 
 require (
-	github.com/domainry/domainry-foundation v0.2.6
-	github.com/domainry/domainry-todo-sdk v0.1.10
+	github.com/domainry/domainry-foundation v0.2.7
+	github.com/domainry/domainry-todo-sdk v0.1.11
 	modernc.org/sqlite v1.57.0
 )
 

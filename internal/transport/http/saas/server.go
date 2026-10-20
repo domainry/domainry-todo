@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-foundation/telemetry"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
@@ -139,12 +140,12 @@ func (s *Server) invoke(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, todocontract.SaaSResponse{Challenge: &todocontract.SaaSChallenge{Token: challengeToken(s.secret, envelope.Operation, challenge.kind, challenge.input), Kind: challenge.kind, Input: challenge.input}})
 			return
 		}
-		writeJSON(w, http.StatusOK, todocontract.SaaSResponse{Error: safeError(err)})
+		writeSaaSError(w, err)
 		return
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {
-		writeJSON(w, http.StatusOK, todocontract.SaaSResponse{Error: &todocontract.SaaSError{Class: "unavailable", Code: "todo.response_invalid"}})
+		httpresponse.WriteError(w, nil, httpresponse.Failure{Status: http.StatusInternalServerError, Code: "todo.response_invalid", Cause: err})
 		return
 	}
 	writeJSON(w, http.StatusOK, todocontract.SaaSResponse{Result: raw})
@@ -277,11 +278,31 @@ func safeCode(v string) string {
 	}
 	return v
 }
-func writeStatus(w http.ResponseWriter, status int, class, code string) {
-	telemetry.RecordHTTPStatusError(w, status, code)
-	writeJSON(w, status, todocontract.SaaSResponse{Error: &todocontract.SaaSError{Class: class, Code: code}})
+func writeSaaSError(w http.ResponseWriter, err error) {
+	wire := safeError(err)
+	status := http.StatusInternalServerError
+	var coded *toolsdk.Error
+	if errors.As(err, &coded) {
+		switch wire.Class {
+		case "bad_request":
+			status = http.StatusBadRequest
+		case "forbidden":
+			status = http.StatusForbidden
+		case "not_found":
+			status = http.StatusNotFound
+		case "conflict":
+			status = http.StatusConflict
+		case "unavailable":
+			if strings.TrimSpace(coded.Class) == "unavailable" {
+				status = http.StatusServiceUnavailable
+			}
+		}
+	}
+	httpresponse.WriteError(w, nil, httpresponse.Failure{Status: status, Code: wire.Code, Message: wire.Message, Cause: err})
+}
+func writeStatus(w http.ResponseWriter, status int, _ string, code string) {
+	httpresponse.WriteError(w, nil, httpresponse.Failure{Status: status, Code: code})
 }
 func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
+	httpresponse.WriteJSON(w, status, value)
 }
