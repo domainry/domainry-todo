@@ -139,7 +139,10 @@ func (s SubjectLifecycle) EraseSubjectForRequest(ctx context.Context, requestID,
 			return deleteErr
 		}
 		completedAt := time.Now().UTC()
-		receipt, _ = json.Marshal(map[string]any{"request_id": requestID, "changed": changed, "source_references_removed": changed["todos"], "completed_at": completedAt.UnixMilli()})
+		receipt, deleteErr = json.Marshal(map[string]any{"request_id": requestID, "changed": changed, "source_references_removed": changed["todos"], "completed_at": completedAt.UnixMilli()})
+		if deleteErr != nil {
+			return deleteErr
+		}
 		step, marshalErr := json.Marshal(persistedSubjectStep{WorkspaceID: a.WorkspaceID, RequestID: requestID, Owner: "todo", Operation: "erase", Payload: append(json.RawMessage(nil), receipt...), CompletedAt: completedAt.UnixMilli()})
 		if marshalErr != nil {
 			return marshalErr
