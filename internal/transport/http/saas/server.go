@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/telemetry"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	todocontract "github.com/domainry/domainry-todo-sdk/contract"
@@ -47,6 +48,12 @@ func New(d Dependencies) (*Server, error) {
 func (s *Server) Handler() http.Handler { return http.HandlerFunc(s.serveHTTP) }
 func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == todocontract.SaaSDiscoveryPath:
+		telemetry.RecordHTTPRoute(r, "GET "+todocontract.SaaSDiscoveryPath)
+	case r.Method == http.MethodPost && r.URL.Path == todocontract.SaaSInvokePath:
+		telemetry.RecordHTTPRoute(r, "POST "+todocontract.SaaSInvokePath)
+	}
 	want := "Bearer " + strings.TrimSpace(s.dependencies.ServiceAccessToken)
 	got := r.Header.Get("Authorization")
 	if len(got) != len(want) || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
