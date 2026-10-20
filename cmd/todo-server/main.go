@@ -11,16 +11,23 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/domainry/domainry-foundation/processhost"
 	saasservice "github.com/domainry/domainry-todo/internal/assembly/saas"
 )
 
 func main() {
-	if err := run(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "domainry-todo:", err)
+	if run() != nil {
 		os.Exit(1)
 	}
 }
-func run() error {
+func run() (runErr error) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	observability, err := processhost.Open(ctx, processhost.Config{ServiceName: "domainry-todo"})
+	if err != nil {
+		return err
+	}
+	defer func() { runErr = observability.Finish(context.Background(), nil, runErr) }()
 	runtimeID := strings.TrimSpace(os.Getenv("TODO_RUNTIME_ID"))
 	token := strings.TrimSpace(os.Getenv("TODO_SERVICE_ACCESS_TOKEN"))
 	databasePath := strings.TrimSpace(os.Getenv("TODO_DATABASE_PATH"))
@@ -28,16 +35,15 @@ func run() error {
 	if address == "" {
 		address = ":8093"
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	service, err := saasservice.Open(ctx, saasservice.Options{RuntimeID: runtimeID, ServiceAccessToken: token, DatabasePath: databasePath})
 	if err != nil {
 		return fmt.Errorf("open Todo SaaS service: %w", err)
 	}
 	defer service.Close(context.Background())
-	server := &http.Server{Addr: address, Handler: service.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	server := &http.Server{Addr: address, Handler: observability.Handler("public", service.Handler()), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.ListenAndServe() }()
+	observability.Started(ctx, map[string]any{"listener_group": "public"})
 	select {
 	case err = <-serveErr:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -45,6 +51,7 @@ func run() error {
 		}
 		return err
 	case <-ctx.Done():
+		observability.Stopping(context.Background(), map[string]any{"reason": "signal"})
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return server.Shutdown(shutdown)
