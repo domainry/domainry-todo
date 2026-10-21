@@ -258,12 +258,18 @@ func safeError(err error) *todocontract.SaaSError {
 	}
 	return &todocontract.SaaSError{Class: "unavailable", Code: "todo.internal_unavailable"}
 }
-func safeClass(v string) string {
+func safeClass(v toolsdk.ErrorClass) string {
 	switch v {
-	case "bad_request", "forbidden", "not_found", "conflict", "unavailable":
-		return v
+	case toolsdk.ErrorClassBadRequest,
+		toolsdk.ErrorClassForbidden,
+		toolsdk.ErrorClassNotFound,
+		toolsdk.ErrorClassConflict,
+		toolsdk.ErrorClassRateLimited,
+		toolsdk.ErrorClassUnavailable,
+		toolsdk.ErrorClassInternal:
+		return string(v)
 	default:
-		return "unavailable"
+		return string(toolsdk.ErrorClassInternal)
 	}
 }
 func safeCode(v string) string {
@@ -292,10 +298,10 @@ func writeSaaSError(w http.ResponseWriter, err error) {
 			status = http.StatusNotFound
 		case "conflict":
 			status = http.StatusConflict
+		case "rate_limited":
+			status = http.StatusTooManyRequests
 		case "unavailable":
-			if strings.TrimSpace(coded.Class) == "unavailable" {
-				status = http.StatusServiceUnavailable
-			}
+			status = http.StatusServiceUnavailable
 		}
 	}
 	httpresponse.WriteError(w, nil, httpresponse.Failure{Status: status, Code: wire.Code, Message: wire.Message, Cause: err})

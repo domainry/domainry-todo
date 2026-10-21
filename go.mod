@@ -3,23 +3,25 @@ module github.com/domainry/domainry-todo
 go 1.26.0
 
 require (
-	github.com/domainry/domainry-lifecycle-sdk v0.1.25
+	github.com/domainry/domainry-lifecycle-sdk v0.1.26
 	github.com/domainry/domainry-orm v0.1.33
-	github.com/domainry/domainry-tools-sdk v0.1.21
+	github.com/domainry/domainry-tools-sdk v0.1.22
 )
 
 require (
-	github.com/domainry/domainry-foundation v0.2.9
-	github.com/domainry/domainry-todo-sdk v0.1.14
+	github.com/domainry/domainry-foundation v0.2.10
+	github.com/domainry/domainry-todo-sdk v0.1.15
 	modernc.org/sqlite v1.57.0
 )
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/domainry/domainry-identity-sdk v0.1.27 // indirect
+	github.com/domainry/domainry-audit-sdk v0.1.15 // indirect
+	github.com/domainry/domainry-identity-sdk v0.1.31 // indirect
 	github.com/domainry/domainry-integration-sdk v0.1.20 // indirect
-	github.com/domainry/domainry-report-sdk v0.1.22 // indirect
+	github.com/domainry/domainry-notification-sdk v0.1.16 // indirect
+	github.com/domainry/domainry-report-sdk v0.1.23 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

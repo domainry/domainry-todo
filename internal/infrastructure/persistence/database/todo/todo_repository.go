@@ -77,7 +77,7 @@ func todoHash(v any) string {
 
 func todoJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 
-func todoError(class, code string) error {
+func todoError(class toolsdk.ErrorClass, code string) error {
 	return &toolsdk.Error{Class: class, Code: "agent.conversation." + code}
 }
 

@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 )
 
-func failure(class, code string) error {
+func failure(class sdk.ErrorClass, code string) error {
 	return &sdk.Error{Class: class, Code: "agent.conversation." + code}
 }
 func text(value string, limit int, required bool) bool {
