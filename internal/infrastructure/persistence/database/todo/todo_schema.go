@@ -18,8 +18,8 @@ const MigrationOwner = "todo"
 const TodoTable = "_agent_user_todos"
 
 var schemaOwnership = []schemaownership.Table{{
-	Name: TodoTable, Owner: MigrationOwner, WorkspaceScope: schemaownership.ScopeExplicitMixed,
-	RetentionClass: schemaownership.RetentionUserErase, PrimaryKey: []string{"owner_key", "todo_id"},
+	Name: TodoTable, Owner: MigrationOwner, Kind: schemaownership.KindEntity, WorkspaceScope: schemaownership.ScopeExplicitMixed,
+	RetentionClass: schemaownership.RetentionUserErase, PrimaryKey: []string{"id"}, EntityIDColumn: "todo_id", EntityIDPrefix: "todo", BusinessKey: []string{"todo_id"},
 	BoundedQueryPath: "owner/todo identity plus bounded status, batch, source-conversation, due-date and stable creation/position cursor queries",
 	DeletionPolicy:   "explicit deletion and subject erasure physically remove the owner's Todo rows after shared lifecycle fencing",
 }}
@@ -61,13 +61,13 @@ func Open(ctx context.Context, db sqlhost.Database, dialect Dialect, profile orm
 func SchemaMigrations(d Dialect) ([]migration.Migration, error) {
 	m := migration.Migration{Version: 1, Name: "todo"}
 	statement, _, err := ormschema.NewTable(d, TodoTable).IfNotExists().Columns(
-		required("owner_key", ormschema.TextKey(64)), required("todo_id", ormschema.TextKey(96)), required("batch_id", ormschema.TextKey(96)), required("position", ormschema.BigInt()), required("created_at", ormschema.BigInt()), required("source_conversation_id", ormschema.TextKey(96)), required("status", ormschema.TextKey(16)), required("revision", ormschema.BigInt()), required("payload_json", ormschema.LongText()),
-	).PrimaryKey("owner_key", "todo_id").Unique("owner_key", "batch_id", "position").Build()
+		ormschema.Column("id", ormschema.BigInt()).NotNull().AutoIncrement(), required("owner_key", ormschema.TextKey(64)), required("todo_id", ormschema.TextKey(96)), required("batch_id", ormschema.TextKey(96)), required("position", ormschema.BigInt()), required("created_at", ormschema.BigInt()), required("source_conversation_id", ormschema.TextKey(96)), required("status", ormschema.TextKey(16)), required("revision", ormschema.BigInt()), required("payload_json", ormschema.LongText()),
+	).PrimaryKey("id").Unique("todo_id").Unique("owner_key", "batch_id", "position").Build()
 	if err != nil {
 		return nil, err
 	}
 	m.Statements = append(m.Statements, statement)
-	statement, _, err = ormschema.NewIndex(d, "idx_agent_todos_owner_v5", TodoTable).Columns("owner_key", "created_at", "batch_id", "position").Build()
+	statement, _, err = ormschema.NewIndex(d, "idx_agent_todos_owner_v5", TodoTable).Columns("owner_key", "created_at", "id").Build()
 	if err != nil {
 		return nil, err
 	}

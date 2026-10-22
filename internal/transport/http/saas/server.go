@@ -171,13 +171,13 @@ func (s *Server) dispatch(ctx context.Context, operation string, raw json.RawMes
 		return s.dependencies.Todos.Todos(ctx, in.Input, in.Authority)
 	case "todos.get":
 		var in struct {
-			ID        string            `json:"id"`
+			TodoID    string            `json:"todo_id"`
 			Authority toolsdk.Authority `json:"authority"`
 		}
 		if e := decodeInput(raw, &in); e != nil {
 			return nil, e
 		}
-		return s.dependencies.Todos.Todo(ctx, in.ID, in.Authority)
+		return s.dependencies.Todos.Todo(ctx, in.TodoID, in.Authority)
 	case "todos.create":
 		var in struct {
 			Input     todocontract.TodoCreate `json:"input"`
@@ -189,24 +189,24 @@ func (s *Server) dispatch(ctx context.Context, operation string, raw json.RawMes
 		return s.dependencies.Todos.CreateTodos(ctx, in.Input, in.Authority)
 	case "todos.update":
 		var in struct {
-			ID        string                  `json:"id"`
+			TodoID    string                  `json:"todo_id"`
 			Input     todocontract.TodoUpdate `json:"input"`
 			Authority toolsdk.Authority       `json:"authority"`
 		}
 		if e := decodeInput(raw, &in); e != nil {
 			return nil, e
 		}
-		return s.dependencies.Todos.UpdateTodo(ctx, in.ID, in.Input, in.Authority)
+		return s.dependencies.Todos.UpdateTodo(ctx, in.TodoID, in.Input, in.Authority)
 	case "todos.delete":
 		var in struct {
-			ID        string                  `json:"id"`
+			TodoID    string                  `json:"todo_id"`
 			Input     todocontract.TodoDelete `json:"input"`
 			Authority toolsdk.Authority       `json:"authority"`
 		}
 		if e := decodeInput(raw, &in); e != nil {
 			return nil, e
 		}
-		e := s.dependencies.Todos.DeleteTodo(ctx, in.ID, in.Input, in.Authority)
+		e := s.dependencies.Todos.DeleteTodo(ctx, in.TodoID, in.Input, in.Authority)
 		return struct{}{}, e
 	case "mutations.apply":
 		var in struct {

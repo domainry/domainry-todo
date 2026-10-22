@@ -3,6 +3,7 @@ package todo
 import (
 	"bytes"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	sharedsubjectlifecycle "github.com/domainry/domainry-foundation/subjectlifecycle"
@@ -14,6 +15,28 @@ import (
 	"path/filepath"
 	"testing"
 )
+
+func TestTodosUsePhysicalIDCursor(t *testing.T) {
+	store, _ := openLifecycleTodoStore(t)
+	authority := sdk.Authority{Known: true, RuntimeID: "todo-cursor-runtime", WorkspaceID: "todo-cursor-workspace", UserID: "alice"}
+	mutation := Mutation{Key: "todo-cursor-create", Operation: "todo_create", Data: json.RawMessage(`{"items":[{"title":"First","timezone":"Asia/Shanghai"},{"title":"Second","timezone":"Asia/Shanghai"}]}`)}
+	if _, err := store.ApplyMutation(t.Context(), mutation, authority); err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.Todos(t.Context(), contract.TodoQuery{Limit: 1}, authority)
+	if err != nil || len(first.Items) != 1 || first.Complete || first.NextCursor == "" {
+		t.Fatalf("first todo page mismatch: page=%+v err=%v", first, err)
+	}
+	raw, decodeErr := base64.RawURLEncoding.DecodeString(first.NextCursor)
+	var cursor todoCursor
+	if decodeErr != nil || json.Unmarshal(raw, &cursor) != nil || cursor.ID != first.Items[0].ID || cursor.ID < 1 {
+		t.Fatalf("todo cursor does not carry the physical id: cursor=%q decoded=%+v err=%v", first.NextCursor, cursor, decodeErr)
+	}
+	second, err := store.Todos(t.Context(), contract.TodoQuery{Limit: 1, Cursor: first.NextCursor}, authority)
+	if err != nil || len(second.Items) != 1 || second.Items[0].ID == first.Items[0].ID || !second.Complete || second.NextCursor != "" {
+		t.Fatalf("second todo page mismatch: page=%+v err=%v", second, err)
+	}
+}
 
 func openLifecycleTodoStore(t *testing.T) (*Store, *sql.DB) {
 	t.Helper()
@@ -73,7 +96,7 @@ func TestSubjectLifecycleErasesOneOwnerAndReplaysReceipt(t *testing.T) {
 	if err != nil || !bytes.Contains(exported, []byte("Alice private task")) || bytes.Contains(exported, []byte("Bob private task")) {
 		t.Fatalf("export=%s err=%v", exported, err)
 	}
-	if _, err = lifecycle.EraseSubjectForRequest(t.Context(), "erase-held", a.WorkspaceID, a.UserID, []lifecyclemodel.LegalHold{{ID: "hold"}}); err == nil {
+	if _, err = lifecycle.EraseSubjectForRequest(t.Context(), "erase-held", a.WorkspaceID, a.UserID, []lifecyclemodel.LegalHold{{ID: 1, HoldID: "hold"}}); err == nil {
 		t.Fatal("legal hold did not block Todo erasure")
 	}
 	receipt, err := lifecycle.EraseSubjectForRequest(t.Context(), "erase-alice", a.WorkspaceID, a.UserID, nil)
@@ -145,7 +168,10 @@ func TestStandaloneTodoReceiptAndScope(t *testing.T) {
 	}
 	b := a
 	b.UserID = "b"
-	if _, e = s.Todo(t.Context(), page.Items[0].ID, b); e == nil {
+	if page.Items[0].ID < 1 || page.Items[0].TodoID == "" {
+		t.Fatalf("todo identifiers were not populated: %+v", page.Items[0])
+	}
+	if _, e = s.Todo(t.Context(), page.Items[0].TodoID, b); e == nil {
 		t.Fatal("cross-owner read")
 	}
 	var n int

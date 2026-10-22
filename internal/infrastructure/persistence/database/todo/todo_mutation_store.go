@@ -33,7 +33,7 @@ func (s *Store) ApplyInTransaction(ctx context.Context, tx *sql.Tx, in Mutation,
 		return out, todoError("bad_request", "todo_invalid")
 	}
 	var args struct {
-		ID               string               `json:"id"`
+		TodoID           string               `json:"todo_id"`
 		Items            []contract.TodoInput `json:"items"`
 		ExpectedRevision int64                `json:"expected_revision"`
 		Patch            contract.TodoPatch   `json:"patch"`
@@ -57,12 +57,12 @@ func (s *Store) ApplyInTransaction(ctx context.Context, tx *sql.Tx, in Mutation,
 		}
 		value, out.ResourceID = batch, batch.BatchID
 	case "todo_update":
-		value, err = s.updateTodo(ctx, tx, args.ID, args.ExpectedRevision, args.Patch, a)
-		out.ResourceID = args.ID
+		value, err = s.updateTodo(ctx, tx, args.TodoID, args.ExpectedRevision, args.Patch, a)
+		out.ResourceID = args.TodoID
 	case "todo_delete":
-		err = s.deleteTodo(ctx, tx, args.ID, args.ExpectedRevision, a)
-		value = map[string]any{"id": args.ID, "deleted": err == nil}
-		out.ResourceID = args.ID
+		err = s.deleteTodo(ctx, tx, args.TodoID, args.ExpectedRevision, a)
+		value = map[string]any{"todo_id": args.TodoID, "deleted": err == nil}
+		out.ResourceID = args.TodoID
 	default:
 		err = todoError("bad_request", "todo_operation_invalid")
 	}
@@ -79,7 +79,10 @@ func (s *Store) MutationReceipt(ctx context.Context, in Mutation, a toolsdk.Auth
 	if err := todoAuthority(a); err != nil {
 		return MutationResult{}, false, err
 	}
-	command := todoOperationCommand("tool-"+todoHash(in.Key), in.Operation, in, a)
+	command, err := todoOperationCommand("tool-"+todoHash(in.Key), in.Operation, in, a)
+	if err != nil {
+		return MutationResult{}, false, err
+	}
 	receipt, found, err := s.operations.GetRecord(ctx, sharedoperation.RecordFilter{WorkspaceID: a.WorkspaceID, Owner: command.Owner, Kind: command.Kind, IdempotencyKey: command.IdempotencyKey})
 	if err != nil || !found {
 		return MutationResult{}, found, err

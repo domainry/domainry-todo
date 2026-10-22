@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	contract "github.com/domainry/domainry-todo-sdk/contract"
@@ -18,32 +19,42 @@ import (
 
 const todoTable = "_agent_user_todos"
 
-func todoScope(a toolsdk.Authority, id string) query.Predicate {
-	return query.And(query.Equal("owner_key", todoOwner(a)), query.Equal("todo_id", id))
+func todoScope(a toolsdk.Authority, todoID string) query.Predicate {
+	return query.And(query.Equal("owner_key", todoOwner(a)), query.Equal("todo_id", todoID))
 }
 
-func (s *Store) Todo(ctx context.Context, id string, a toolsdk.Authority) (contract.Todo, error) {
+func (s *Store) Todo(ctx context.Context, todoID string, a toolsdk.Authority) (contract.Todo, error) {
 	if err := todoAuthority(a); err != nil {
 		return contract.Todo{}, err
 	}
-	return s.todo(ctx, s.store.Database(), id, a)
+	return s.todo(ctx, s.store.Database(), todoID, a)
 }
-func (s *Store) todo(ctx context.Context, db DB, id string, a toolsdk.Authority) (contract.Todo, error) {
+func (s *Store) todo(ctx context.Context, db DB, todoID string, a toolsdk.Authority) (contract.Todo, error) {
 	var out contract.Todo
-	if !validKey(id) {
+	if !validKey(todoID) {
 		return out, todoError("bad_request", "todo_invalid")
 	}
-	found, err := s.readPayload(ctx, db, todoTable, todoScope(a, id), &out)
-	if err == nil && !found {
-		err = todoError("not_found", "todo_not_found")
+	statement, args, err := query.NewSelectBuilder(s.store.Renderer(), todoTable).Columns("id", "payload_json").Where(todoScope(a, todoID)).Limit(1).Build()
+	if err != nil {
+		return out, err
+	}
+	var raw []byte
+	var physicalID int64
+	err = db.QueryRowContext(ctx, statement, args...).Scan(&physicalID, &raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, todoError("not_found", "todo_not_found")
+	}
+	if err == nil {
+		err = json.Unmarshal(raw, &out)
+		out.ID = physicalID
 	}
 	return out, err
 }
 
 type todoCursor struct {
-	Owner, Query, Batch string
-	Created, Cutoff     int64
-	Position            int
+	Owner, Query    string
+	ID              int64
+	Created, Cutoff int64
 }
 
 func (s *Store) Todos(ctx context.Context, in contract.TodoQuery, a toolsdk.Authority) (contract.TodoPage, error) {
@@ -67,10 +78,10 @@ func (s *Store) Todos(ctx context.Context, in contract.TodoQuery, a toolsdk.Auth
 	filters := []query.Predicate{query.Equal("owner_key", owner)}
 	if in.Cursor != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(in.Cursor)
-		if err != nil || json.Unmarshal(raw, &cursor) != nil || cursor.Owner != owner || cursor.Query != hash || !validKey(cursor.Batch) || cursor.Position < 1 || cursor.Created < 1 || cursor.Cutoff < cursor.Created {
+		if err != nil || json.Unmarshal(raw, &cursor) != nil || cursor.Owner != owner || cursor.Query != hash || cursor.ID < 1 || cursor.Created < 1 || cursor.Cutoff < cursor.Created {
 			return out, todoError("bad_request", "todo_cursor_invalid")
 		}
-		filters = append(filters, query.Or(query.LessThan("created_at", cursor.Created), query.And(query.Equal("created_at", cursor.Created), query.LessThan("batch_id", cursor.Batch)), query.And(query.Equal("created_at", cursor.Created), query.Equal("batch_id", cursor.Batch), query.GreaterThan("position", cursor.Position))))
+		filters = append(filters, query.Or(query.LessThan("created_at", cursor.Created), query.And(query.Equal("created_at", cursor.Created), query.GreaterThan("id", cursor.ID))))
 	}
 	filters = append(filters, query.LessThanOrEqual("created_at", cursor.Cutoff))
 	if in.Status != "all" {
@@ -82,7 +93,7 @@ func (s *Store) Todos(ctx context.Context, in contract.TodoQuery, a toolsdk.Auth
 	if in.SourceConversationID != "" {
 		filters = append(filters, query.Equal("source_conversation_id", in.SourceConversationID))
 	}
-	statement, args, err := query.NewSelectBuilder(s.store.Renderer(), todoTable).Columns("payload_json").Where(query.And(filters...)).OrderBy(query.Descending("created_at"), query.Descending("batch_id"), query.Ascending("position")).Limit(301).Build()
+	statement, args, err := query.NewSelectBuilder(s.store.Renderer(), todoTable).Columns("id", "payload_json").Where(query.And(filters...)).OrderBy(query.Descending("created_at"), query.Ascending("id")).Limit(301).Build()
 	if err != nil {
 		return out, err
 	}
@@ -100,19 +111,21 @@ func (s *Store) Todos(ctx context.Context, in contract.TodoQuery, a toolsdk.Auth
 		}
 		var raw []byte
 		var item contract.Todo
-		if err = rows.Scan(&raw); err != nil {
+		var physicalID int64
+		if err = rows.Scan(&physicalID, &raw); err != nil {
 			return out, err
 		}
 		if err = json.Unmarshal(raw, &item); err != nil {
 			return out, err
 		}
+		item.ID = physicalID
 		matches := strings.Contains(strings.ToLower(item.Title+"\n"+item.Description), needle)
 		if matches && size+len(raw) > 24576 && len(out.Items) > 0 {
 			out.Complete = false
 			break
 		}
 		scanned++
-		cursor.Created, cursor.Batch, cursor.Position = item.CreatedAt.UnixMilli(), item.BatchID, item.Position
+		cursor.ID, cursor.Created = physicalID, item.CreatedAt.UnixMilli()
 		if matches {
 			out.Items = append(out.Items, item)
 			size += len(raw)
@@ -155,9 +168,20 @@ func (s *Store) createTodos(ctx context.Context, tx *sql.Tx, items []contract.To
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	for index, in := range items {
-		item := contract.Todo{ID: "todo_" + todoHash([]any{out.BatchID, index})[:32], Title: in.Title, Description: in.Description, Status: "open", DueDate: in.DueDate, DueAt: in.DueAt, Timezone: in.Timezone, Revision: 1, BatchID: out.BatchID, Position: index + 1, SourceConversationID: source, SourceRunID: run, CreatedAt: now, UpdatedAt: now}
-		statement, args, err = query.NewInsertBuilder(s.store.Renderer(), todoTable).Columns("owner_key", "todo_id", "batch_id", "position", "created_at", "source_conversation_id", "status", "revision", "payload_json").Values(todoOwner(a), item.ID, item.BatchID, item.Position, now.UnixMilli(), source, item.Status, item.Revision, todoJSON(item)).Build()
+		todoID, idErr := entityid.New("todo")
+		if idErr != nil {
+			return out, idErr
+		}
+		item := contract.Todo{TodoID: todoID, Title: in.Title, Description: in.Description, Status: "open", DueDate: in.DueDate, DueAt: in.DueAt, Timezone: in.Timezone, Revision: 1, BatchID: out.BatchID, Position: index + 1, SourceConversationID: source, SourceRunID: run, CreatedAt: now, UpdatedAt: now}
+		statement, args, err = query.NewInsertBuilder(s.store.Renderer(), todoTable).Columns("owner_key", "todo_id", "batch_id", "position", "created_at", "source_conversation_id", "status", "revision", "payload_json").Values(todoOwner(a), item.TodoID, item.BatchID, item.Position, now.UnixMilli(), source, item.Status, item.Revision, todoJSON(item)).Build()
 		if err = todoExec(ctx, tx, statement, args, err); err != nil {
+			return out, err
+		}
+		statement, args, err = query.NewSelectBuilder(s.store.Renderer(), todoTable).Columns("id").Where(query.Equal("todo_id", item.TodoID)).Limit(1).Build()
+		if err != nil {
+			return out, err
+		}
+		if err = tx.QueryRowContext(ctx, statement, args...).Scan(&item.ID); err != nil {
 			return out, err
 		}
 		out.Items = append(out.Items, item)
@@ -165,8 +189,8 @@ func (s *Store) createTodos(ctx context.Context, tx *sql.Tx, items []contract.To
 	return out, nil
 }
 
-func (s *Store) updateTodo(ctx context.Context, tx *sql.Tx, id string, revision int64, patch contract.TodoPatch, a toolsdk.Authority) (contract.Todo, error) {
-	item, err := s.todo(ctx, tx, id, a)
+func (s *Store) updateTodo(ctx context.Context, tx *sql.Tx, todoID string, revision int64, patch contract.TodoPatch, a toolsdk.Authority) (contract.Todo, error) {
+	item, err := s.todo(ctx, tx, todoID, a)
 	if err != nil {
 		return item, err
 	}
@@ -213,15 +237,15 @@ func (s *Store) updateTodo(ctx context.Context, tx *sql.Tx, id string, revision 
 	}
 	item.Revision++
 	item.UpdatedAt = now
-	statement, args, err := query.NewUpdateBuilder(s.store.Renderer(), todoTable).Set("status", item.Status).Set("revision", item.Revision).Set("payload_json", todoJSON(item)).Where(query.And(todoScope(a, id), query.Equal("revision", revision))).Build()
+	statement, args, err := query.NewUpdateBuilder(s.store.Renderer(), todoTable).Set("status", item.Status).Set("revision", item.Revision).Set("payload_json", todoJSON(item)).Where(query.And(todoScope(a, todoID), query.Equal("revision", revision))).Build()
 	return item, todoCAS(ctx, tx, statement, args, err)
 }
 
-func (s *Store) deleteTodo(ctx context.Context, tx *sql.Tx, id string, revision int64, a toolsdk.Authority) error {
-	if !validKey(id) || revision < 1 {
+func (s *Store) deleteTodo(ctx context.Context, tx *sql.Tx, todoID string, revision int64, a toolsdk.Authority) error {
+	if !validKey(todoID) || revision < 1 {
 		return todoError("bad_request", "todo_invalid")
 	}
-	statement, args, err := query.NewDeleteBuilder(s.store.Renderer(), todoTable).Where(query.And(todoScope(a, id), query.Equal("revision", revision))).Build()
+	statement, args, err := query.NewDeleteBuilder(s.store.Renderer(), todoTable).Where(query.And(todoScope(a, todoID), query.Equal("revision", revision))).Build()
 	return todoCAS(ctx, tx, statement, args, err)
 }
 
@@ -235,7 +259,10 @@ func (s *Store) todoMutation(ctx context.Context, clientID, operation string, in
 		return todoError("bad_request", "todo_client_id_required")
 	}
 	return s.transaction(ctx, func(tx *sql.Tx) error {
-		command := todoOperationCommand(clientID, operation, input, a)
+		command, commandErr := todoOperationCommand(clientID, operation, input, a)
+		if commandErr != nil {
+			return commandErr
+		}
 		receipt, claimed, err := s.operations.Claim(sharedoperation.WithExecutor(ctx, tx), command)
 		if errors.Is(err, sharedoperation.ErrIdempotencyConflict) {
 			return todoError("conflict", "idempotency_conflict")
@@ -254,21 +281,24 @@ func (s *Store) todoMutation(ctx context.Context, clientID, operation string, in
 			return err
 		}
 		result := json.RawMessage(todoJSON(value))
-		if err = s.operations.Complete(sharedoperation.WithExecutor(ctx, tx), sharedoperation.Completion{ID: command.ID, Scope: command.Scope, Owner: command.Owner, Kind: command.Kind, IdempotencyKey: command.IdempotencyKey, RequestFingerprint: command.RequestFingerprint, Result: result, CompletedAt: time.Now().UTC()}); err != nil {
+		if err = s.operations.Complete(sharedoperation.WithExecutor(ctx, tx), sharedoperation.Completion{OperationID: command.OperationID, Scope: command.Scope, Owner: command.Owner, Kind: command.Kind, IdempotencyKey: command.IdempotencyKey, RequestFingerprint: command.RequestFingerprint, Result: result, CompletedAt: time.Now().UTC()}); err != nil {
 			return err
 		}
 		return json.Unmarshal(result, out)
 	})
 }
 
-func todoOperationCommand(clientID, action string, input any, a toolsdk.Authority) sharedoperation.Command {
+func todoOperationCommand(clientID, action string, input any, a toolsdk.Authority) (sharedoperation.Command, error) {
 	key := todoOwner(a) + ":" + todoHash(clientID)
-	id := "todo-operation:" + todoHash([]string{a.WorkspaceID, key})
+	id, err := entityid.New("op")
+	if err != nil {
+		return sharedoperation.Command{}, err
+	}
 	return sharedoperation.Command{
-		ID: id, Scope: sharedoperation.Scope{WorkspaceID: a.WorkspaceID, ResourceType: "todo_owner", ResourceID: todoOwner(a)},
+		OperationID: id, Scope: sharedoperation.Scope{WorkspaceID: a.WorkspaceID, ResourceType: "todo_owner", ResourceID: todoOwner(a)},
 		Owner: "todo", Kind: "todo.mutation", ActionKey: action, IdempotencyKey: key, RequestFingerprint: todoHash([]any{action, input}),
 		RequestedBy: a.UserID, Reason: "Todo mutation", Reference: clientID, StatusURL: "todo://operations/" + id, CreatedAt: time.Now().UTC(),
-	}
+	}, nil
 }
 func (s *Store) CreateTodos(ctx context.Context, in contract.TodoCreate, a toolsdk.Authority) (contract.TodoBatch, error) {
 	var out contract.TodoBatch
@@ -277,15 +307,15 @@ func (s *Store) CreateTodos(ctx context.Context, in contract.TodoCreate, a tools
 	}, &out)
 	return out, err
 }
-func (s *Store) UpdateTodo(ctx context.Context, id string, in contract.TodoUpdate, a toolsdk.Authority) (contract.Todo, error) {
+func (s *Store) UpdateTodo(ctx context.Context, todoID string, in contract.TodoUpdate, a toolsdk.Authority) (contract.Todo, error) {
 	var out contract.Todo
-	err := s.todoMutation(ctx, in.ClientID, "update", []any{id, in}, a, func(tx *sql.Tx) (any, error) { return s.updateTodo(ctx, tx, id, in.ExpectedRevision, in.Patch, a) }, &out)
+	err := s.todoMutation(ctx, in.ClientID, "update", []any{todoID, in}, a, func(tx *sql.Tx) (any, error) { return s.updateTodo(ctx, tx, todoID, in.ExpectedRevision, in.Patch, a) }, &out)
 	return out, err
 }
-func (s *Store) DeleteTodo(ctx context.Context, id string, in contract.TodoDelete, a toolsdk.Authority) error {
+func (s *Store) DeleteTodo(ctx context.Context, todoID string, in contract.TodoDelete, a toolsdk.Authority) error {
 	var out map[string]bool
-	return s.todoMutation(ctx, in.ClientID, "delete", []any{id, in}, a, func(tx *sql.Tx) (any, error) {
-		err := s.deleteTodo(ctx, tx, id, in.ExpectedRevision, a)
+	return s.todoMutation(ctx, in.ClientID, "delete", []any{todoID, in}, a, func(tx *sql.Tx) (any, error) {
+		err := s.deleteTodo(ctx, tx, todoID, in.ExpectedRevision, a)
 		return map[string]bool{"deleted": err == nil}, err
 	}, &out)
 }

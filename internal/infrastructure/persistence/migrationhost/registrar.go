@@ -22,7 +22,7 @@ type Registrar struct {
 func (*Registrar) Driver() string { return "sqlite" }
 func (*Registrar) Schema() string { return "" }
 func (r *Registrar) Prepare(ctx context.Context) error {
-	statement, args, err := schema.NewTable(r.Renderer, "_schema_migrations").IfNotExists().Columns(schema.Column("owner", schema.TextKey(191)).NotNull(), schema.Column("version", schema.BigInt()).NotNull(), schema.Column("name", schema.TextKey(191)).NotNull(), schema.Column("checksum", schema.TextKey(64)).NotNull(), schema.Column("dirty", schema.Boolean()).NotNull(), schema.Column("applied_at", schema.BigInt()).NotNull()).PrimaryKey("owner", "version").Build()
+	statement, args, err := schema.NewTableWithRequiredColumns(r.Renderer, "_schema_migrations", schema.Column("id", schema.BigInt()).NotNull().AutoIncrement()).IfNotExists().Columns(schema.Column("owner", schema.TextKey(191)).NotNull(), schema.Column("version", schema.BigInt()).NotNull(), schema.Column("name", schema.TextKey(191)).NotNull(), schema.Column("checksum", schema.TextKey(64)).NotNull(), schema.Column("dirty", schema.Boolean()).NotNull(), schema.Column("applied_at", schema.BigInt()).NotNull()).PrimaryKey("id").Unique("owner", "version").Build()
 	if err != nil {
 		return err
 	}
